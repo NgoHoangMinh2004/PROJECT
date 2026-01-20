@@ -1,0 +1,73 @@
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Danh sách Users</title>
+</head>
+
+<body>
+    <h1 style="text-align:center;">Danh sách Users</h1>
+    <table border="1" cellspacing="0" cellpadding="5" style="width:100%; text-align:center;">
+        <thead>
+            <tr>
+                <th>UserID</th>
+                <th>FullName</th>
+                <th>Email</th>
+                <th>RoleID</th>
+                <th>RoleName</th>
+                <th>AgeGroupID</th>
+                <th>AgeGroupName</th>
+                <th>LevelID</th>
+                <th>LevelName</th>
+                <th>CurrentDifficulty</th>
+                <th>IsActive</th>
+                <th>CreatedAt</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% users.forEach(user=> { %>
+                <tr>
+                    <td>
+                        <%= user.UserID %>
+                    </td>
+                    <td>
+                        <%= user.FullName %>
+                    </td>
+                    <td>
+                        <%= user.Email %>
+                    </td>
+                    <td>
+                        <%= user.RoleID %>
+                    </td>
+                    <td>
+                        <%= user.RoleName %>
+                    </td>
+                    <td>
+                        <%= user.AgeGroupID %>
+                    </td>
+                    <td>
+                        <%= user.AgeGroupName %>
+                    </td>
+                    <td>
+                        <%= user.LevelID %>
+                    </td>
+                    <td>
+                        <%= user.LevelName %>
+                    </td>
+                    <td>
+                        <%= user.CurrentDifficulty %>
+                    </td>
+                    <td>
+                        <%= user.IsActive %>
+                    </td>
+                    <td>
+                        <%= user.CreatedAt.toLocaleString() %>
+                    </td>
+                </tr>
+                <% }) %>
+        </tbody>
+    </table>
+</body>
+
+</html>

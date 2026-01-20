@@ -1,0 +1,105 @@
+/* --- src/index.css --- */
+
+/* 1. Reset mặc định để giao diện không bị khoảng trắng thừa */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* 2. Thiết lập font chữ và màu nền cơ bản */
+body {
+  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: #ffffff;
+  color: #333333;
+  /* Màu đen dịu mắt */
+  line-height: 1.5;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  /* Ẩn thanh cuộn của body chính */
+}
+
+/* 3. Khung bao toàn bộ ứng dụng (Layout Flexbox) */
+.app-container {
+  display: flex;
+  /* Xếp ngang: Trái - Phải */
+  height: 100vh;
+  /* Chiều cao full màn hình */
+  width: 100%;
+}
+
+/* 4. Thanh Sidebar bên trái */
+.sidebar {
+  width: 250px;
+  /* Chiều rộng cố định */
+  background-color: #f1f8e9;
+  /* Màu xanh lá rất nhạt (Light Green) */
+  border-right: 1px solid #dcedc8;
+  /* Viền ngăn cách mờ */
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  flex-shrink: 0;
+  /* Không cho phép sidebar bị co lại */
+}
+
+/* Logo hoặc tiêu đề menu */
+.sidebar-header {
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: #2e7d32;
+  /* Màu xanh lá đậm cho tiêu đề */
+  margin-bottom: 30px;
+  text-align: center;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #dcedc8;
+}
+
+/* Các đường link trong menu */
+.menu-link {
+  display: block;
+  text-decoration: none;
+  color: #558b2f;
+  /* Màu chữ xanh trung tính */
+  padding: 12px 15px;
+  margin-bottom: 5px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+/* Hiệu ứng khi di chuột vào link */
+.menu-link:hover {
+  background-color: #dcedc8;
+  /* Màu nền đậm hơn chút khi hover */
+  color: #1b5e20;
+}
+
+/* Hiệu ứng cho link đang được chọn (Active) */
+.menu-link.active {
+  background-color: #a5d6a7;
+  /* Màu xanh đậm hơn để đánh dấu */
+  color: #000;
+  font-weight: bold;
+}
+
+/* 5. Phần nội dung chính bên phải */
+.main-content {
+  flex: 1;
+  /* Chiếm toàn bộ không gian còn lại */
+  background-color: #ffffff;
+  /* Nền trắng */
+  padding: 40px;
+  overflow-y: auto;
+  /* Cho phép cuộn dọc nếu nội dung dài */
+}
+
+/* Style cơ bản cho tiêu đề trang con */
+.main-content h1 {
+  font-size: 1.8rem;
+  margin-bottom: 20px;
+  color: #000;
+  border-bottom: 2px solid #eee;
+  padding-bottom: 10px;
+}
