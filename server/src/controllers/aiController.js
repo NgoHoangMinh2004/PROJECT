@@ -1,34 +1,55 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const axios = require('axios');
 require('dotenv').config();
 
-// Khởi tạo GenAI
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-
 const chatWithAI = async (req, res) => {
+
+    const modelName = "gemini-flash-latest";
+
     try {
         const { message } = req.body;
+        const apiKey = process.env.GOOGLE_API_KEY;
 
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
-        const model = genAI.getGenerativeModel({
-            model: "gemini-pro"
+        const payload = {
+            contents: [
+                {
+                    parts: [
+                        {
+                            text: `Bạn là giáo viên tiếng Anh. Hãy trả lời thật là dễ hiểu và đáng yêu: "${message}"`
+                        }
+                    ]
+                }
+            ]
+        };
+
+        const response = await axios.post(url, payload, {
+            headers: { 'Content-Type': 'application/json' }
         });
 
-        const prompt = `
-        Vai trò: Bạn là một giáo viên tiếng Anh thân thiện, nhiệt tình. 
-        Nhiệm vụ: Giải thích từ vựng, sửa lỗi ngữ pháp, luyện giao tiếp ngắn gọn và dễ hiểu.
-        Yêu cầu: Luôn khuyến khích học sinh. Giải thích bằng tiếng Việt nếu hỏi tiếng Việt.
-        
-        Câu hỏi của học sinh: "${message}"
-        `;
+        const replyText = response.data.candidates?.[0]?.content?.parts?.[0]?.text || "AI không trả lời.";
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text();
+        res.json({ reply: replyText });
 
-        res.json({ reply: text });
     } catch (error) {
-        console.error("AI Error:", error.message); // Log lỗi gọn hơn
-        res.status(500).json({ reply: "Thầy đang bị mất kết nối với máy chủ Google. Em đợi một lát rồi thử lại nhé!" });
+        const status = error.response?.status;
+        const errorData = error.response?.data;
+
+        // Log lỗi ra console để debug
+        console.error(`AI Error [${status}]:`, JSON.stringify(errorData, null, 2));
+
+        let userMessage = "Lỗi kết nối AI.";
+
+        // Xử lý thông báo lỗi an toàn (vì modelName đã được khai báo bên ngoài)
+        if (status === 404) {
+            userMessage = `Lỗi 404: Không tìm thấy model '${modelName}'.`;
+        } else if (status === 429) {
+            userMessage = "Lỗi 429: Tài khoản Google này chưa được cấp quyền dùng Model này (Quota = 0).";
+        } else if (status === 400) {
+            userMessage = "Lỗi 400: API Key không hợp lệ.";
+        }
+
+        res.status(500).json({ reply: userMessage });
     }
 };
 

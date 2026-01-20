@@ -76,7 +76,7 @@ const LessonPage = () => {
         { title: 'ID', dataIndex: 'LessonID', key: 'LessonID', width: 60 },
         {
             title: 'Khóa học',
-            dataIndex: 'CourseName', // Backend bạn đã JOIN bảng Courses nên có trường này
+            dataIndex: 'CourseName',
             key: 'CourseName',
             render: t => <Tag color="blue">{t}</Tag>
         },
@@ -115,7 +115,8 @@ const LessonPage = () => {
                 title="Danh sách Bài học"
                 extra={
                     <Button type="primary" icon={<PlusOutlined />} onClick={() => {
-                        setEditingLesson(null);
+                        se
+                        EditingLesson(null);
                         form.resetFields();
                         setIsModalOpen(true);
                     }}>
