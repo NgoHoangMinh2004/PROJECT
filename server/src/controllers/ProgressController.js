@@ -1,4 +1,4 @@
-const { poolPromise } = require("./config/database");
+const { poolPromise } = require("../config/database");
 
 // ===== 1. GET: Lấy toàn bộ danh sách tiến trình (Kèm tên User và Tên Bài) =====
 const getAllProgress = async (req, res) => {

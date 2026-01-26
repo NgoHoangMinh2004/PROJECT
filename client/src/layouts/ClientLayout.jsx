@@ -85,7 +85,6 @@ const ClientLayout = () => {
                     <Outlet />
                 </div>
             </Content>
-
             <Footer style={{ textAlign: 'center' }}>English App ©2026</Footer>
             <AIChatWidget />
         </Layout>

@@ -1,4 +1,4 @@
-const { sql, poolPromise } = require("./config/database");
+const { sql, poolPromise } = require("../config/database");
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 

@@ -1,4 +1,4 @@
-const { poolPromise } = require("./config/database");
+const { poolPromise } = require("../config/database");
 
 // ===== 1. GET: Lấy toàn bộ danh sách Difficulties =====
 const getDifficulties = async (req, res) => {
@@ -8,7 +8,6 @@ const getDifficulties = async (req, res) => {
             SELECT DifficultyID, Description
             FROM Difficulties
         `);
-
         // Trả về mảng dữ liệu JSON
         res.status(200).json(result.recordset);
     } catch (err) {

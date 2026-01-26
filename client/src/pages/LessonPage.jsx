@@ -115,8 +115,7 @@ const LessonPage = () => {
                 title="Danh sách Bài học"
                 extra={
                     <Button type="primary" icon={<PlusOutlined />} onClick={() => {
-                        se
-                        EditingLesson(null);
+                        setEditingLesson(null);
                         form.resetFields();
                         setIsModalOpen(true);
                     }}>

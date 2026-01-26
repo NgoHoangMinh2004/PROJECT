@@ -3,7 +3,7 @@ const cors = require('cors');
 const express = require('express');
 const path = require('path');
 require('dotenv').config();
-const configViewEngine = require('./controllers/config/viewEngine');
+const configViewEngine = require('./config/viewEngine');
 
 // Import routes
 const userRouter = require('./routes/user');

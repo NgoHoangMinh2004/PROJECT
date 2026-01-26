@@ -16,6 +16,7 @@ import OnboardingPage from "./client-page/OnboardingPage";
 import CurriculumPage from './client-page/CurriculumPage';
 import LessonDetailPage from './client-page/LessonDetailPage';
 import ProfilePage from './client-page/ProfilePage';
+import LessonTestPage from './client-page/LessonTestPage'
 
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem('token');
@@ -40,7 +41,10 @@ function App() {
           <Route path="learn" element={<LearningPath />} />
           <Route path="curriculum" element={<CurriculumPage />} />
           <Route path="lesson/:lessonId" element={<LessonDetailPage />} />
+          {/*Router bai kiem tra*/}
+          <Route path="/test/:testId" element={<LessonTestPage />} />
         </Route>
+
 
         {/* ADMIN ROUTES */}
         <Route path="/admin" element={<PrivateRoute><AdminLayout /></PrivateRoute>}>
@@ -53,7 +57,6 @@ function App() {
           <Route path="progress" element={<ProgressPage />} />
           <Route path="test" element={<TestPage />} />
         </Route>
-
       </Routes >
     </BrowserRouter >
   );

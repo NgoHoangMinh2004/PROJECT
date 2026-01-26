@@ -1,4 +1,4 @@
-const { poolPromise } = require("./config/database");
+const { poolPromise } = require("../config/database");
 
 // ===== GET: Lấy danh sách Courses =====
 const getCourses = async (req, res) => {

@@ -1,4 +1,4 @@
-const { poolPromise } = require('../controllers/config/database');
+const { poolPromise } = require('../config/database');
 
 // Hàm lấy tất cả dữ liệu cho Dashboard
 const getDashboardData = async () => {

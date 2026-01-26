@@ -106,3 +106,40 @@
 .bouncing-star {
     animation: bounce 2s infinite;
 }
+
+/* Container chính: Giới hạn chiều cao bằng màn hình và cho phép cuộn dọc */
+.learning-scroll-container {
+    height: 100vh;
+    /* Hoặc calc(100vh - 64px) nếu bạn có Header cố định */
+    overflow-y: auto;
+    /* Tự động hiện thanh cuộn khi nội dung dài */
+    overflow-x: hidden;
+    /* Ẩn cuộn ngang */
+    padding-bottom: 50px;
+    /* Khoảng trống dưới cùng để không bị che nội dung */
+    background-color: #f0f2f5;
+    /* Màu nền nhẹ cho dễ nhìn */
+}
+
+/* --- TÙY CHỈNH THANH CUỘN (SCROLLBAR) CHO ĐẸP --- */
+.learning-scroll-container::-webkit-scrollbar {
+    width: 8px;
+    /* Độ rộng thanh cuộn */
+}
+
+.learning-scroll-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    /* Màu nền rãnh cuộn */
+    border-radius: 4px;
+}
+
+.learning-scroll-container::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    /* Màu thanh cuộn bình thường */
+    border-radius: 4px;
+}
+
+.learning-scroll-container::-webkit-scrollbar-thumb:hover {
+    background: #58cc02;
+    /* Màu thanh cuộn khi di chuột vào (Xanh lá) */
+}
