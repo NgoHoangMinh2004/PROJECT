@@ -1,9 +1,46 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Button, Input, Card, List, Typography, Space, Spin } from 'antd';
+import { Button, Input, Card, List, Typography, Space, Spin, message } from 'antd';
 import { RobotOutlined, SendOutlined, CloseOutlined, AudioOutlined } from '@ant-design/icons';
 import axiosClient from '../services/axiosClient';
 
 const { Text } = Typography;
+
+// --- HÀM SPEAK SỬ DỤNG GOOGLE TTS (FREE & STABLE) ---
+const speak = (text) => {
+    if (!text) return;
+
+    // 1. Ngừng các giọng đọc khác
+    if (window.responsiveVoice) {
+        window.responsiveVoice.cancel();
+    }
+    window.speechSynthesis.cancel();
+
+    // 2. Xác định ngôn ngữ
+    const isEnglish = /^[a-zA-Z0-9\s,.'!?-]*$/.test(text);
+    const voice = isEnglish ? "US English Female" : "Vietnamese Female";
+
+    // 3. Gọi lệnh đọc
+    if (window.responsiveVoice && window.responsiveVoice.voiceSupport()) {
+        window.responsiveVoice.speak(text, voice, {
+            rate: 1,
+            pitch: 1,
+            onstart: () => console.log("AI bắt đầu nói..."),
+            onerror: (e) => {
+                console.warn("ResponsiveVoice lỗi, dùng dự phòng hệ thống...");
+                fallbackSpeak(text, isEnglish);
+            }
+        });
+    } else {
+        fallbackSpeak(text, isEnglish);
+    }
+};
+
+// Hàm dự phòng (Fallback) nếu thư viện không load được
+const fallbackSpeak = (text, isEnglish) => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = isEnglish ? 'en-US' : 'vi-VN';
+    window.speechSynthesis.speak(utterance);
+};
 
 const AIChatWidget = () => {
     const [visible, setVisible] = useState(false);
@@ -17,91 +54,13 @@ const AIChatWidget = () => {
 
     const messagesEndRef = useRef(null);
 
-    // --- KHỞI TẠO GIỌNG ĐỌC NGAY KHI VÀO APP ---
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
     useEffect(() => {
-        if (typeof window !== 'undefined' && window.speechSynthesis) {
-            window.speechSynthesis.getVoices();
-            const forceLoad = () => window.speechSynthesis.getVoices();
-            window.speechSynthesis.onvoiceschanged = forceLoad;
-        }
-    }, []);
-
-    const isVietnamese = (text) => {
-        const vietnameseRegex = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
-        return vietnameseRegex.test(text);
-    };
-
-    // --- LOGIC PHÁT ÂM (TTS) THÔNG MINH ---
-    const speak = (text) => {
-        if (!window.speechSynthesis) return;
-
-        // Dừng âm thanh cũ
-        window.speechSynthesis.cancel();
-
-        // Hàm đợi danh sách giọng load xong
-        const loadVoicesAndSpeak = () => {
-            const voices = window.speechSynthesis.getVoices();
-
-            // Nếu chưa thấy giọng nào, đợi 50ms rồi thử lại
-            if (voices.length === 0) {
-                setTimeout(loadVoicesAndSpeak, 50);
-                return;
-            }
-
-            // Tách câu để đọc lần lượt: Tiếng Việt giọng Việt, Anh giọng Anh
-            const chunks = text.split(/([.\n!?;]+)/).filter(c => c.trim().length > 0);
-
-            let queue = [];
-
-            // TÌM GIỌNG VIỆT (Ưu tiên Microsoft An/HoaiMy vừa cài)
-            const viVoice = voices.find(v => v.name.includes('Microsoft An')) ||
-                voices.find(v => v.name.includes('Microsoft HoaiMy')) ||
-                voices.find(v => v.lang === 'vi-VN');
-
-            // TÌM GIỌNG ANH
-            const enVoice = voices.find(v => v.name.includes('Google US English')) ||
-                voices.find(v => v.name.includes('Microsoft David')) ||
-                voices.find(v => v.lang === 'en-US');
-
-            chunks.forEach(chunk => {
-                if (chunk.match(/^[.\n!?;]+$/)) return; // Bỏ qua dấu câu đứng riêng
-
-                const utterance = new SpeechSynthesisUtterance(chunk);
-
-                // Nếu là tiếng Việt (dùng hàm kiểm tra Regex)
-                if (isVietnamese(chunk)) {
-                    utterance.lang = 'vi-VN';
-                    if (viVoice) {
-                        utterance.voice = viVoice;
-                    } else {
-                        // Nếu vẫn chưa cài giọng, báo lỗi nhẹ console
-                        console.warn("Chưa cài giọng Tiếng Việt trong Windows Settings!");
-                    }
-                    utterance.rate = 1.0;
-                }
-                // Nếu là tiếng Anh
-                else {
-                    utterance.lang = 'en-US';
-                    if (enVoice) utterance.voice = enVoice;
-                    utterance.rate = 0.9;
-                }
-
-                queue.push(utterance);
-            });
-
-            // Hàm chạy hàng đợi đọc
-            const playQueue = (index) => {
-                if (index >= queue.length) return;
-                const u = queue[index];
-                u.onend = () => playQueue(index + 1);
-                window.speechSynthesis.speak(u);
-            };
-
-            if (queue.length > 0) playQueue(0);
-        };
-
-        loadVoicesAndSpeak();
-    };
+        scrollToBottom();
+    }, [messages, visible]);
 
     // --- LOGIC THU ÂM (STT) ---
     const startRecognition = () => {
@@ -125,16 +84,19 @@ const AIChatWidget = () => {
         recognition.onend = () => setIsRecording(false);
         recognition.start();
     };
-
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
-
     useEffect(() => {
-        scrollToBottom();
-    }, [messages, visible]);
+        const handleExternalCommand = (e) => {
+            const { message, context } = e.detail;
+            setVisible(true); // Mở hộp chat
+            if (message) {
+                handleSend(message, context); // Bắt AI xử lý nội dung giải thích
+            }
+        };
 
-    const handleSend = async (textOverride) => {
+        window.addEventListener('OPEN_AI_ASSISTANT', handleExternalCommand);
+        return () => window.removeEventListener('OPEN_AI_ASSISTANT', handleExternalCommand);
+    }, []);
+    const handleSend = async (textOverride, contextOverride) => {
         const textToSend = textOverride || inputValue;
         if (!textToSend.trim() || loading) return;
 
@@ -144,14 +106,13 @@ const AIChatWidget = () => {
         setLoading(true);
 
         try {
-            // Lưu ý: Gửi message kèm context nếu cần ở đây
             const res = await axiosClient.post('/ai/chat', { message: textToSend });
-            const replyText = res.reply || res.data?.reply || "AI không phản hồi.";
+            const replyText = res.reply || "AI không phản hồi.";
 
             const aiMsg = { role: 'ai', content: replyText };
             setMessages(prev => [...prev, aiMsg]);
 
-            // AI bắt đầu nói
+            // GỌI HÀM SPEAK GOOGLE TTS
             speak(replyText);
 
         } catch (error) {
@@ -221,7 +182,7 @@ const AIChatWidget = () => {
                         <Button
                             shape="circle"
                             danger={isRecording}
-                            icon={<AudioOutlined className={isRecording ? 'animate-pulse' : ''} />}
+                            icon={<AudioOutlined />}
                             onClick={startRecognition}
                             style={{ border: isRecording ? '1px solid red' : 'none', background: isRecording ? '#fff1f0' : '#f1f5f9' }}
                         />

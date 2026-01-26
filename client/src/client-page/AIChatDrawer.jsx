@@ -1,31 +1,30 @@
-// Trong file AIChatDrawer.jsx hoặc file xử lý logic AI của bạn
-
+// Hàm xử lý đọc văn bản miễn phí và ổn định
 const speak = (text) => {
-    // 1. Hủy các yêu cầu đọc đang dang dở để tránh chồng chéo âm thanh
+    if (!text) return;
+
+    // 1. Dừng mọi âm thanh đang phát
     window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(text);
+    // 2. Kiểm tra ngôn ngữ để chọn giọng đọc
+    const isEnglish = /^[a-zA-Z0-9\s,.'!?-]*$/.test(text);
+    const lang = isEnglish ? 'en' : 'vi';
 
-    // 2. Lấy danh sách giọng đọc của hệ thống
-    const voices = window.speechSynthesis.getVoices();
+    // 3. Sử dụng Google TTS API (Miễn phí và nhanh)
+    const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${lang}&client=tw-ob`;
 
-    // 3. Tìm kiếm giọng tiếng Việt chuẩn
-    // Thường là Google Tiếng Việt (trên Chrome) hoặc Microsoft An (trên Edge)
-    const vietnameseVoice = voices.find(voice =>
-        voice.lang === 'vi-VN' || voice.lang.includes('vi')
-    );
+    const audio = new Audio(url);
 
-    if (vietnameseVoice) {
-        utterance.voice = vietnameseVoice;
-        utterance.lang = 'vi-VN';
-    } else {
-        // Nếu không có giọng Việt, vẫn để vi-VN để trình duyệt cố gắng giả lập
-        utterance.lang = 'vi-VN';
+    // Tăng tốc độ một chút nếu là tiếng Anh cho tự nhiên
+    if (isEnglish) {
+        audio.playbackRate = 1.0;
     }
 
-    // 4. Cấu hình tốc độ (rate) và độ cao (pitch)
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
+    const silentAudio = new Audio();
+    silentAudio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
+    silentAudio.play().catch(() => { });
 
-    window.speechSynthesis.speak(utterance);
+    audio.play().catch(e => {
+        console.warn("Cần tương tác với trang web trước khi phát âm thanh", e);
+    });
 };
+export default speak;

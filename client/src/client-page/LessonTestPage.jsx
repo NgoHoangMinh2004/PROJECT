@@ -95,30 +95,48 @@ const LessonTestPage = () => {
 
     const processSubmit = async () => {
         let correctCount = 0;
+        let wrongQuestions = [];
+
         questions.forEach(q => {
             if (answers[q.ExerciseID] === q.CorrectAnswer) {
                 correctCount++;
+            } else {
+                wrongQuestions.push(q);
             }
         });
 
         const finalScore = Math.round((correctCount / questions.length) * 100);
 
         try {
-            const res = await axiosClient.post('/learning/submit-test', {
+            await axiosClient.post('/learning/submit-test', {
                 courseId: testInfo.CourseID,
                 score: finalScore
             });
 
             setSubmitted(true);
-            setScoreResult({
-                score: finalScore,
-                passScore: testInfo.PassScore,
-                isPassed: finalScore >= testInfo.PassScore,
-                message: res.message
-            });
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            setScoreResult({ score: finalScore, isPassed: finalScore >= testInfo.PassScore });
+
+            // --- TỰ ĐỘNG GỌI AI GIẢI THÍCH CÂU SAI ĐẦU TIÊN ---
+            if (wrongQuestions.length > 0) {
+                const firstWrong = wrongQuestions[0];
+                const event = new CustomEvent('OPEN_AI_ASSISTANT', {
+                    detail: {
+                        message: "Mình làm sai câu này, hãy giải thích giúp mình nhé!",
+                        context: {
+                            question: firstWrong.Question,
+                            userAnswer: answers[firstWrong.ExerciseID],
+                            correctAnswer: firstWrong.CorrectAnswer,
+                            OptionA: firstWrong.OptionA,
+                            OptionB: firstWrong.OptionB,
+                            OptionC: firstWrong.OptionC,
+                            OptionD: firstWrong.OptionD,
+                        }
+                    }
+                });
+                window.dispatchEvent(event);
+            }
         } catch (error) {
-            message.error("Lỗi khi nộp kết quả");
+            message.error("Lỗi khi nộp bài");
         }
     };
 
