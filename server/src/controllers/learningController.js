@@ -97,24 +97,42 @@ const getLearningPath = async (req, res) => {
 // 2. Lấy bài tập của bài học
 const getExercisesByLesson = async (req, res) => {
     try {
+        // Lấy lessonId từ URL
         const { lessonId } = req.params;
+
+        // 1. KIỂM TRA QUAN TRỌNG
+        if (!lessonId || isNaN(lessonId)) {
+            return res.status(400).json({ message: "Mã bài học không hợp lệ." });
+        }
+
+        // 2. Ép kiểu sang số nguyên
+        const lessonIdInt = parseInt(lessonId, 10);
+
         const pool = await poolPromise;
 
         const result = await pool.request()
-            .input('LessonID', sql.Int, lessonId)
+            .input('LessonID', sql.Int, lessonIdInt) // <--- Truyền biến đã ép kiểu
             .query(`
                 SELECT 
                     e.ExerciseID, e.ExerciseType, e.Question, 
                     e.OptionA, e.OptionB, e.OptionC, e.OptionD, e.CorrectAnswer,
                     l.Title AS LessonTitle, l.LearningGoal,
-                    l.CourseID, l.OrderIndex -- Cần lấy thêm cái này để Frontend gửi lại
+                    l.CourseID, l.OrderIndex
                 FROM Exercises e
                 JOIN Lessons l ON e.LessonID = l.LessonID
                 WHERE e.LessonID = @LessonID
             `);
 
+        // Kiểm tra xem có dữ liệu không
+        if (result.recordset.length === 0) {
+            // Có thể bài học chưa có bài tập, nhưng vẫn trả về mảng rỗng để Frontend không lỗi map
+            console.log("Bài học này chưa có bài tập nào.");
+            return res.json([]);
+        }
+
         res.json(result.recordset);
     } catch (error) {
+        console.error("Lỗi getExercisesByLesson:", error);
         res.status(500).json({ message: "Lỗi lấy bài tập", error: error.message });
     }
 };
@@ -128,7 +146,6 @@ const completeLesson = async (req, res) => {
         const pool = await poolPromise;
 
         // --- VIỆC 1: Update bài hiện tại thành ĐÃ XONG ---
-        // SỬA: Thêm CurrentDifficulty vào INSERT phòng trường hợp dòng chưa tồn tại
         await pool.request()
             .input('UserID', sql.Int, userId)
             .input('LessonID', sql.Int, lessonId)
@@ -155,7 +172,6 @@ const completeLesson = async (req, res) => {
         if (nextLessonRes.recordset.length > 0) {
             const nextLessonId = nextLessonRes.recordset[0].LessonID;
 
-            // SỬA: Thêm CurrentDifficulty vào INSERT
             await pool.request()
                 .input('UserID', sql.Int, userId)
                 .input('NextID', sql.Int, nextLessonId)
@@ -228,12 +244,23 @@ const submitLevelTest = async (req, res) => {
 
 const getTestContent = async (req, res) => {
     try {
+        // 1. Lấy và kiểm tra TestID
         const { testId } = req.params;
+
+
+        // KIỂM TRA QUAN TRỌNG:
+        if (!testId || isNaN(testId)) {
+            return res.status(400).json({ message: "Mã bài kiểm tra không hợp lệ." });
+        }
+
+        // Ép kiểu sang số nguyên an toàn
+        const testIdInt = parseInt(testId, 10);
+
         const pool = await poolPromise;
 
-        // 1. Lấy thông tin bài kiểm tra (Để biết thuộc Course nào và PassScore bao nhiêu)
+        // 2. Lấy thông tin bài kiểm tra
         const testInfoRes = await pool.request()
-            .input('TestID', sql.Int, testId)
+            .input('TestID', sql.Int, testIdInt) // Truyền biến đã ép kiểu
             .query('SELECT * FROM LessonTests WHERE LessonTestID = @TestID');
 
         if (testInfoRes.recordset.length === 0) {
@@ -243,8 +270,7 @@ const getTestContent = async (req, res) => {
         const testInfo = testInfoRes.recordset[0];
         const courseId = testInfo.CourseID;
 
-        // 2. Lấy ngẫu nhiên 20 câu hỏi từ bảng Exercises thuộc Course này
-        // Logic: Join Exercises với Lessons để lọc theo CourseID
+        // 3. Lấy ngẫu nhiên 10 câu hỏi
         const questionsRes = await pool.request()
             .input('CourseID', sql.Int, courseId)
             .query(`
@@ -254,12 +280,11 @@ const getTestContent = async (req, res) => {
                 FROM Exercises e
                 JOIN Lessons l ON e.LessonID = l.LessonID
                 WHERE l.CourseID = @CourseID
-                ORDER BY NEWID() -- Lấy ngẫu nhiên mỗi lần gọi
+                ORDER BY NEWID() 
             `);
 
-        // Nếu không đủ câu hỏi
         if (questionsRes.recordset.length === 0) {
-            return res.status(400).json({ message: "Chưa có đủ dữ liệu câu hỏi cho bài kiểm tra này." });
+            return res.status(400).json({ message: "Chưa có dữ liệu câu hỏi cho khóa học này." });
         }
 
         res.json({
@@ -268,10 +293,11 @@ const getTestContent = async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error);
+        console.error("Lỗi getTestContent:", error);
         res.status(500).json({ message: "Lỗi tạo đề thi", error: error.message });
     }
 };
+
 //Danh Sach Khoa hoc da mo khoa
 const getUnlockedCourses = async (req, res) => {
     try {

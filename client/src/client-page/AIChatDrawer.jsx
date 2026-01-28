@@ -1,4 +1,4 @@
-// Hàm xử lý đọc văn bản miễn phí và ổn định
+// Hàm xử lý đọc văn bản 
 const speak = (text) => {
     if (!text) return;
 
@@ -9,12 +9,12 @@ const speak = (text) => {
     const isEnglish = /^[a-zA-Z0-9\s,.'!?-]*$/.test(text);
     const lang = isEnglish ? 'en' : 'vi';
 
-    // 3. Sử dụng Google TTS API (Miễn phí và nhanh)
+    // 3. Sử dụng Google TTS API 
     const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${lang}&client=tw-ob`;
 
     const audio = new Audio(url);
 
-    // Tăng tốc độ một chút nếu là tiếng Anh cho tự nhiên
+    // Tốc độ đọc Tiếng Anh
     if (isEnglish) {
         audio.playbackRate = 1.0;
     }

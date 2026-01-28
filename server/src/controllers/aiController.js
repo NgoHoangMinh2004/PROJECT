@@ -18,7 +18,7 @@ const chatWithAI = async (req, res) => {
 
     const { message, context } = req.body;
 
-    const modelName = "gemini-2.5-flash";
+    const modelName = "gemma-3-1b-it";
 
     // 2. Chuẩn bị Prompt
     let promptText = `Bạn là gia sư AI của ứng dụng HM Education. Hãy xưng hô thân thiện. `;
@@ -31,13 +31,24 @@ const chatWithAI = async (req, res) => {
             2. Đưa ra ví dụ minh họa ngắn gọn bằng TIẾNG ANH.
             3. TUYỆT ĐỐI KHÔNG dùng ký tự đặc biệt như **, #, _, -. Chỉ dùng chữ cái và dấu chấm câu.`;
     } else {
-        promptText += `Hãy trả lời ngắn gọn bằng tiếng Việt: "${message}"`;
-    }
+        promptText += `BẠN LÀ: Một giáo viên tiếng Anh AI tâm huyết của HM Education.
+            
+            QUY TẮC ỨNG XỬ (BẮT BUỘC):
+            1. KHÔNG BAO GIỜ lặp lại lời người dùng như một con vẹt.
+            2. NẾU người dùng chào (Xin chào, Hi): Hãy chào lại ngắn gọn và gợi ý ngay một chủ đề học (Ví dụ: từ vựng, ngữ pháp cơ bản).
+            3. NẾU người dùng muốn học (Dạy tôi..., Hướng dẫn tôi...): Hãy GIẢNG BÀI NGAY LẬP TỨC. Đưa ra từ vựng, cấu trúc câu và ví dụ ngắn gọn khoảng 15 từ.
+            4. NẾU người dùng nói ngắn (Bắt đầu đi, OK): Hãy chủ động đưa ra một câu đố vui hoặc một kiến thức mới để bắt đầu bài học.
+            5. PHONG CÁCH: Thân thiện, khuyến khích, giải thích bằng Tiếng Việt, ví dụ Tiếng Anh.
+            6. ĐỊNH DẠNG: Tuyệt đối KHÔNG dùng ký tự đặc biệt (*, #, _, -) để tránh lỗi giọng đọc.
+            7.Cố gắng biến thành 1 cuộc hội thoại dễ hiểu và gần gũi.
 
+            Hội thoại hiện tại:
+            Học viên: "${message}"
+            Gia sư AI (bạn):`;
+    }
     const payload = {
         contents: [{ parts: [{ text: promptText }] }]
     };
-
     // 3. Cơ chế xoay vòng và thử lại (Retry logic)
     let attempts = 0;
     while (attempts < apiKeys.length) {
@@ -48,7 +59,7 @@ const chatWithAI = async (req, res) => {
         try {
             const response = await axios.post(url, payload, {
                 headers: { 'Content-Type': 'application/json' },
-                timeout: 10000 // Hủy yêu cầu nếu sau 10s không phản hồi
+                timeout: 60000 // Hủy yêu cầu nếu sau 10s không phản hồi
             });
 
             const replyText = response.data.candidates?.[0]?.content?.parts?.[0]?.text || "AI không trả lời.";

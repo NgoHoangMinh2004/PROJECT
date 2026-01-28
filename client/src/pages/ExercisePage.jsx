@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, message, Popconfirm, Space, Card, Breadcrumb, Select, Tag, Row, Col } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, QuestionCircleOutlined } from '@ant-design/icons';
-import exerciseService from '../services/exerciseService'; // File gọi API của bạn
-import lessonService from '../services/lessonService';     // Để lấy danh sách bài học cho ô Select
+import { Table, Button, Modal, Form, Input, message, Popconfirm, Space, Card, Breadcrumb, Select, Tag, Row, Col, FloatButton } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, QuestionCircleOutlined, FilterOutlined } from '@ant-design/icons';
+import exerciseService from '../services/exerciseService';
+import lessonService from '../services/lessonService';
 
 const { Option } = Select;
 const { TextArea } = Input;
 
 const ExercisePage = () => {
-    const [exercises, setExercises] = useState([]);
+    const [exercises, setExercises] = useState([]); // Dữ liệu gốc (tất cả)
+    const [filteredExercises, setFilteredExercises] = useState([]); // Dữ liệu đã lọc để hiển thị
     const [lessons, setLessons] = useState([]);
+
+    // State cho bộ lọc
+    const [selectedLessonFilter, setSelectedLessonFilter] = useState(null); // null = Hiện tất cả
+
     const [loading, setLoading] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingExercise, setEditingExercise] = useState(null);
@@ -34,7 +39,17 @@ const ExercisePage = () => {
 
     useEffect(() => { loadData(); }, []);
 
-    // 2. XỬ LÝ LƯU (THÊM / SỬA)
+    // 2. LOGIC LỌC DỮ LIỆU (Chạy mỗi khi exercises gốc hoặc filter thay đổi)
+    useEffect(() => {
+        if (!selectedLessonFilter) {
+            setFilteredExercises(exercises); // Nếu không chọn gì -> Hiện hết
+        } else {
+            const filtered = exercises.filter(ex => ex.LessonID === selectedLessonFilter);
+            setFilteredExercises(filtered);
+        }
+    }, [exercises, selectedLessonFilter]);
+
+    // 3. XỬ LÝ LƯU
     const handleSave = async (values) => {
         try {
             if (editingExercise) {
@@ -47,13 +62,13 @@ const ExercisePage = () => {
             setIsModalOpen(false);
             setEditingExercise(null);
             form.resetFields();
-            loadData();
+            loadData(); // Load lại để cập nhật list mới
         } catch (error) {
             message.error("Lỗi lưu bài tập");
         }
     };
 
-    // 3. XỬ LÝ XÓA
+    // 4. XỬ LÝ XÓA
     const handleDelete = async (id) => {
         try {
             await exerciseService.delete(id);
@@ -64,18 +79,30 @@ const ExercisePage = () => {
         }
     };
 
-    // --- CẤU HÌNH CỘT BẢNG ---
+    // 5. MỞ MODAL THÊM MỚI (Tự động điền bài học nếu đang lọc)
+    const handleOpenAddModal = () => {
+        setEditingExercise(null);
+        form.resetFields();
+
+        // Nếu đang lọc bài nào, thì set mặc định form là bài đó luôn cho tiện
+        if (selectedLessonFilter) {
+            form.setFieldValue('LessonID', selectedLessonFilter);
+        }
+
+        setIsModalOpen(true);
+    };
+
     const columns = [
         { title: 'ID', dataIndex: 'ExerciseID', width: 60, align: 'center' },
         {
             title: 'Bài học',
-            dataIndex: 'LessonTitle', // Backend cần JOIN để trả về cái này
+            dataIndex: 'LessonTitle',
             render: t => <Tag color="blue">{t}</Tag>
         },
         {
             title: 'Câu hỏi',
             dataIndex: 'Question',
-            ellipsis: true, // Nếu dài quá thì cắt bớt
+            ellipsis: true,
             width: 300
         },
         {
@@ -102,35 +129,64 @@ const ExercisePage = () => {
         },
     ];
 
-    // --- HIỂN THỊ CHI TIẾT CÁC ĐÁP ÁN KHI BẤM DẤU CỘNG (+) ---
-    const expandedRowRender = (record) => {
-        return (
-            <div style={{ paddingLeft: 50, background: '#f9f9f9', padding: 10 }}>
-                <p><b>A:</b> {record.OptionA}</p>
-                <p><b>B:</b> {record.OptionB}</p>
-                <p><b>C:</b> {record.OptionC}</p>
-                <p><b>D:</b> {record.OptionD}</p>
-            </div>
-        );
-    };
+    const expandedRowRender = (record) => (
+        <div style={{ paddingLeft: 50, background: '#f9f9f9', padding: 10 }}>
+            <p><b>A:</b> {record.OptionA}</p>
+            <p><b>B:</b> {record.OptionB}</p>
+            <p><b>C:</b> {record.OptionC}</p>
+            <p><b>D:</b> {record.OptionD}</p>
+        </div>
+    );
 
     return (
-        <div>
-            <Breadcrumb style={{ marginBottom: 16 }} items={[{ title: 'Admin' }, { title: 'Quản lý Bài tập' }]} />
+        <div
+            id="exercise-scroll-container"
+            style={{
+                height: '100vh',
+                overflowY: 'auto',
+                padding: '20px',
+                background: '#f0f2f5'
+            }}
+        >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <Breadcrumb items={[{ title: 'Admin' }, { title: 'Quản lý Bài tập' }]} />
 
-            <Card title={<span><QuestionCircleOutlined /> Ngân hàng câu hỏi</span>} extra={
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => {
-                    setEditingExercise(null);
-                    form.resetFields();
-                    setIsModalOpen(true);
-                }}>Thêm câu hỏi</Button>
-            }>
+                {/* --- BỘ LỌC BÀI HỌC --- */}
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <span style={{ fontWeight: 500 }}><FilterOutlined /> Lọc theo bài:</span>
+                    <Select
+                        placeholder="Chọn bài học để lọc"
+                        style={{ width: 250 }}
+                        allowClear
+                        value={selectedLessonFilter}
+                        onChange={(val) => setSelectedLessonFilter(val)}
+                    >
+                        <Option value={null}>-- Tất cả bài học --</Option>
+                        {lessons.map(l => (
+                            <Option key={l.LessonID} value={l.LessonID}>{l.Title}</Option>
+                        ))}
+                    </Select>
+                </div>
+            </div>
+
+            <Card
+                title={<span><QuestionCircleOutlined /> Danh sách câu hỏi ({filteredExercises.length})</span>}
+                extra={
+                    <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenAddModal}>
+                        Thêm câu hỏi
+                    </Button>
+                }
+            >
                 <Table
-                    dataSource={exercises}
+                    // Dùng filteredExercises thay vì exercises
+                    dataSource={filteredExercises}
                     columns={columns}
                     rowKey="ExerciseID"
                     loading={loading}
-                    expandable={{ expandedRowRender }} // Thêm dòng này để hiện A, B, C, D
+                    expandable={{ expandedRowRender }}
+                    pagination={false} // Tắt phân trang để hiện hết
+                    sticky={{ offsetHeader: 0 }}
+                    scroll={{ x: 'max-content' }}
                 />
             </Card>
 
@@ -140,11 +196,10 @@ const ExercisePage = () => {
                 open={isModalOpen}
                 onOk={() => form.submit()}
                 onCancel={() => setIsModalOpen(false)}
-                width={800} // Form rộng hơn chút để chứa 4 đáp án
+                width={800}
+                style={{ top: 20 }}
             >
                 <Form form={form} layout="vertical" onFinish={handleSave}>
-
-                    {/* Chọn bài học */}
                     <Form.Item name="LessonID" label="Thuộc Bài học" rules={[{ required: true }]}>
                         <Select placeholder="Chọn bài học..." showSearch optionFilterProp="children">
                             {lessons.map(l => (
@@ -155,12 +210,10 @@ const ExercisePage = () => {
                         </Select>
                     </Form.Item>
 
-                    {/* Nhập câu hỏi */}
                     <Form.Item name="Question" label="Nội dung câu hỏi" rules={[{ required: true }]}>
                         <TextArea rows={2} placeholder="Nhập câu hỏi..." />
                     </Form.Item>
 
-                    {/* Loại câu hỏi (nếu cần) */}
                     <Form.Item name="ExerciseType" label="Loại" initialValue="Quiz">
                         <Select>
                             <Option value="Quiz">Trắc nghiệm (Quiz)</Option>
@@ -168,7 +221,6 @@ const ExercisePage = () => {
                         </Select>
                     </Form.Item>
 
-                    {/* --- KHU VỰC NHẬP 4 ĐÁP ÁN --- */}
                     <div style={{ background: '#f0f2f5', padding: '15px', borderRadius: '8px', marginBottom: '15px' }}>
                         <p style={{ fontWeight: 'bold', marginBottom: 10 }}>Các phương án trả lời:</p>
                         <Row gutter={16}>
@@ -197,7 +249,6 @@ const ExercisePage = () => {
                         </Row>
                     </div>
 
-                    {/* Chọn đáp án đúng */}
                     <Form.Item
                         name="CorrectAnswer"
                         label="Đáp án đúng"
@@ -210,9 +261,13 @@ const ExercisePage = () => {
                             <Option value="D">D</Option>
                         </Select>
                     </Form.Item>
-
                 </Form>
             </Modal>
+
+            <FloatButton.BackTop
+                target={() => document.getElementById('exercise-scroll-container')}
+                style={{ right: 24, bottom: 50 }}
+            />
         </div>
     );
 };
