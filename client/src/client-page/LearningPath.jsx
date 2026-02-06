@@ -154,7 +154,7 @@ const LearningPath = () => {
                         >
                             {unlockedCourses.map(course => (
                                 <Option key={course.CourseID} value={course.CourseID}>
-                                    {course.CourseName} (Level {course.CourseID - 1})
+                                    {course.CourseName}
                                 </Option>
                             ))}
                         </Select>

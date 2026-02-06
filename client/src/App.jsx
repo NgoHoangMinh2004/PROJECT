@@ -24,8 +24,9 @@ import LessonDetailPage from './client-page/LessonDetailPage';
 import ProfilePage from './client-page/ProfilePage';
 import LessonTestPage from './client-page/LessonTestPage';
 
-// Global Components
+// AI Components
 import AIChatWidget from './components/AIChatWidget';
+// import MingWakeUp from './components/MingWakeUp';
 
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem('token');
@@ -33,23 +34,24 @@ const PrivateRoute = ({ children }) => {
 };
 
 function App() {
+
   return (
     <BrowserRouter>
-      {/* Widget AI nằm ngoài Routes để luôn hiển thị (hoặc bạn có thể đưa vào trong ClientLayout nếu muốn ẩn ở trang Login) */}
+
+
+      {/* Giao diện Chat AI */}
       <AIChatWidget />
 
       <Routes>
-        {/* --- 1. PUBLIC ROUTES (Không cần đăng nhập) --- */}
+        {/* --- 1. PUBLIC ROUTES --- */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 
-        {/* --- 2. CLIENT ROUTES (Học viên) --- */}
-
+        {/* --- 2. CLIENT ROUTES --- */}
         <Route path="/onboarding" element={<PrivateRoute><OnboardingPage /></PrivateRoute>} />
         <Route path="/lesson/:lessonId" element={<PrivateRoute><LessonDetailPage /></PrivateRoute>} />
         <Route path="/test/:testId" element={<PrivateRoute><LessonTestPage /></PrivateRoute>} />
 
-        {/* B. Các trang có Layout chung (Menu, Header) */}
         <Route path="/" element={<PrivateRoute><ClientLayout /></PrivateRoute>}>
           <Route index element={<Navigate to="/learn" />} />
           <Route path="learn" element={<LearningPath />} />
@@ -57,7 +59,7 @@ function App() {
           <Route path="profile" element={<ProfilePage />} />
         </Route>
 
-        {/* --- 3. ADMIN ROUTES (Quản trị viên) --- */}
+        {/* --- 3. ADMIN ROUTES --- */}
         <Route path="/admin" element={<PrivateRoute><AdminLayout /></PrivateRoute>}>
           <Route index element={<Dashboard />} />
           <Route path="courses" element={<CoursesPage />} />
@@ -69,9 +71,7 @@ function App() {
           <Route path="test" element={<TestPage />} />
         </Route>
 
-        {/* Route bắt lỗi 404 - Quay về trang chủ */}
         <Route path="*" element={<Navigate to="/" replace />} />
-
       </Routes>
     </BrowserRouter>
   );

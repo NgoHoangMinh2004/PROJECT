@@ -1,88 +1,89 @@
 const axios = require('axios');
 require('dotenv').config();
 
-// Biến toàn cục để theo dõi index của key hiện tại giữa các lần gọi API khác nhau
 let globalKeyIndex = 0;
 
 const chatWithAI = async (req, res) => {
-    // 1. Cấu hình mảng API Keys từ file .env
     const apiKeys = [
         process.env.GOOGLE_API_KEY_1,
         process.env.GOOGLE_API_KEY_2,
         process.env.GOOGLE_API_KEY_3
-    ].filter(key => key); // Lọc bỏ các key bị trống hoặc undefined
+    ].filter(key => key);
 
-    if (apiKeys.length === 0) {
-        return res.status(500).json({ reply: "Lỗi: Server chưa cấu hình API Key." });
-    }
+    if (apiKeys.length === 0) return res.status(500).json({ reply: "Lỗi Server API Key." });
 
-    const { message, context } = req.body;
+    const { message, context, history } = req.body;
+    const modelName = "gemini-2.5-flash";
 
-    const modelName = "gemma-3-1b-it";
+    // --- THIẾT LẬP NHÂN CÁCH (PERSONA) ---
+    let roleDescription = `
+    BẠN LÀ: "Ming" - Một người bạn thân thiết, tâm lý và giỏi tiếng Anh.
+    
+    TÔN CHỈ HOẠT ĐỘNG: "Cảm xúc là số 1 - Học tập là số 2".
+    
+    ĐẶC ĐIỂM TÍNH CÁCH:
+    1.  Thấu hiểu & Đồng cảm (High EQ):
+        - Nếu người dùng than buồn/mệt/áp lực: TUYỆT ĐỐI KHÔNG giảng bài ngay. Hãy an ủi, lắng nghe, hỏi han như một người bạn tri kỷ. (Ví dụ: "Ôi thương thế, hôm nay có chuyện gì tệ hả cậu? Kể tớ nghe đi 🥺").
+        - Nếu người dùng vui: Hãy ăn mừng nhiệt tình (Ví dụ: "Tuyệt vời ông mặt trời! 🎉 Phải khao tớ đó nha!").
+    
+    2.  Hài hước & Tích cực:
+        - Luôn dùng Emoji để tạo không khí vui vẻ (😄, 🌟, 💪, 🥺).
+        - Có thể đùa vui nhẹ nhàng nếu phù hợp ngữ cảnh.
+        - Luôn khích lệ, động viên (Ví dụ: "Sai xíu thôi, sửa lại là đỉnh ngay!").
 
-    // 2. Chuẩn bị Prompt
-    let promptText = `Bạn là gia sư AI của ứng dụng HM Education. Hãy xưng hô thân thiện. `;
+    3.  Cách dạy Tiếng Anh (Tinh tế):
+        - Đừng bắt lỗi như cảnh sát. Hãy sửa lỗi theo kiểu "Góp ý nhẹ".
+        - Ví dụ thay vì nói "Sai ngữ pháp", hãy nói: "Cậu đã cố gắng rồi, để mình sửa lại là '...' thì nghe sẽ tự nhiên hơn đó!".
+        - Khi đưa ra lời khuyên, hãy lồng ghép các câu idiom (thành ngữ) tiếng Anh ngắn gọn, ý nghĩa về cuộc sống.
+
+    4.  Định dạng:
+        - Trả lời ngắn gọn khoảng 15-18 từ, súc tích (như tin nhắn chat).
+        - KHÔNG dùng ký tự đặc biệt (*, #, _) để giọng đọc không bị lỗi.
+        - Tôi nghĩ bạn nên thêm 1 vài câu tục ngữ băng tiếng anh khi nghe tâm sự của người học và cách vài câu 1-2 câu mới thêm câu tiếng anh như thế vào
+    `;
+
+    // Nếu đang trong ngữ cảnh sửa bài tập thì cần nghiêm túc hơn một chút, nhưng vẫn giữ nét thân thiện
     if (context) {
-        promptText += `
-            Học viên làm sai câu: "${context.question}"
-            Học viên chọn: "${context.userAnswer}", Đáp án đúng: "${context.correctAnswer}".
-            YÊU CẦU:
-            1. Giải thích lý do sai bằng TIẾNG VIỆT nhẹ nhàng, dễ hiểu.
-            2. Đưa ra ví dụ minh họa ngắn gọn bằng TIẾNG ANH.
-            3. TUYỆT ĐỐI KHÔNG dùng ký tự đặc biệt như **, #, _, -. Chỉ dùng chữ cái và dấu chấm câu.`;
-    } else {
-        promptText += `BẠN LÀ: Một giáo viên tiếng Anh AI tâm huyết của HM Education.
-            
-            QUY TẮC ỨNG XỬ (BẮT BUỘC):
-            1. KHÔNG BAO GIỜ lặp lại lời người dùng như một con vẹt.
-            2. NẾU người dùng chào (Xin chào, Hi): Hãy chào lại ngắn gọn và gợi ý ngay một chủ đề học (Ví dụ: từ vựng, ngữ pháp cơ bản).
-            3. NẾU người dùng muốn học (Dạy tôi..., Hướng dẫn tôi...): Hãy GIẢNG BÀI NGAY LẬP TỨC. Đưa ra từ vựng, cấu trúc câu và ví dụ ngắn gọn khoảng 15 từ.
-            4. NẾU người dùng nói ngắn (Bắt đầu đi, OK): Hãy chủ động đưa ra một câu đố vui hoặc một kiến thức mới để bắt đầu bài học.
-            5. PHONG CÁCH: Thân thiện, khuyến khích, giải thích bằng Tiếng Việt, ví dụ Tiếng Anh.
-            6. ĐỊNH DẠNG: Tuyệt đối KHÔNG dùng ký tự đặc biệt (*, #, _, -) để tránh lỗi giọng đọc.
-            7.Cố gắng biến thành 1 cuộc hội thoại dễ hiểu và gần gũi.
-
-            Hội thoại hiện tại:
-            Học viên: "${message}"
-            Gia sư AI (bạn):`;
+        roleDescription += `
+        \n[NGỮ CẢNH HIỆN TẠI]: Bạn ấy đang làm bài tập và bị sai.
+        - Câu hỏi: "${context.question}"
+        - Bạn ấy chọn: "${context.userAnswer}" (Đáp án đúng là: "${context.correctAnswer}").
+        -> Hãy giải thích lỗi sai thật nhẹ nhàng, dễ hiểu. Đừng làm bạn ấy nản chí. Hãy nói "Không sao đâu, câu này hơi lừa xíu..." rồi mới giải thích.`;
     }
+
+    // --- XỬ LÝ LỊCH SỬ CHAT (Giữ nguyên logic chuẩn đã sửa ở bước trước) ---
+    let conversation = [];
+    if (history && Array.isArray(history) && history.length > 0) {
+        const recentHistory = history.slice(-20);
+        conversation = recentHistory.map(msg => ({
+            role: msg.role === 'ai' ? 'model' : 'user',
+            parts: [{ text: msg.content }]
+        }));
+    }
+
+    conversation.push({ role: "user", parts: [{ text: message }] });
+
     const payload = {
-        contents: [{ parts: [{ text: promptText }] }]
+        systemInstruction: { parts: [{ text: roleDescription }] },
+        contents: conversation
     };
-    // 3. Cơ chế xoay vòng và thử lại (Retry logic)
+
+    // --- GỌI API (Giữ nguyên logic xoay vòng Key) ---
     let attempts = 0;
     while (attempts < apiKeys.length) {
-        // Lấy key hiện tại dựa trên globalKeyIndex
         const currentApiKey = apiKeys[globalKeyIndex];
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${currentApiKey}`;
 
         try {
-            const response = await axios.post(url, payload, {
-                headers: { 'Content-Type': 'application/json' },
-                timeout: 60000 // Hủy yêu cầu nếu sau 10s không phản hồi
-            });
-
-            const replyText = response.data.candidates?.[0]?.content?.parts?.[0]?.text || "AI không trả lời.";
-            return res.json({ reply: replyText });
-
+            const response = await axios.post(url, payload, { headers: { 'Content-Type': 'application/json' }, timeout: 60000 });
+            return res.json({ reply: response.data.candidates?.[0]?.content?.parts?.[0]?.text || "..." });
         } catch (error) {
-            const status = error.response?.status;
-
-            // Nếu gặp lỗi 429 (Hết quota), đổi sang key tiếp theo và thử lại ngay
-            if (status === 429 && attempts < apiKeys.length - 1) {
-                console.warn(`Key số ${globalKeyIndex + 1} hết hạn mức. Đang thử Key tiếp theo...`);
+            if (error.response?.status === 429 && attempts < apiKeys.length - 1) {
                 globalKeyIndex = (globalKeyIndex + 1) % apiKeys.length;
                 attempts++;
-                continue; // Tiếp tục vòng lặp while với key mới
+                continue;
             }
-
-            // Nếu là lỗi khác (404, 400...) hoặc đã hết sạch các key để thử
-            console.error(`AI Error [${status}]:`, error.response?.data || error.message);
-
-            let userMessage = "HM Tutor đang bận một chút, bạn thử lại sau 30 giây nhé!";
-            if (status === 404) userMessage = "Model AI không tồn tại hoặc sai URL.";
-
-            return res.status(status || 500).json({ reply: userMessage });
+            return res.status(500).json({ reply: "Cú Mèo đang bị ốm xíu, đợi tí nhé..." });
         }
     }
 };

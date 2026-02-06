@@ -1,204 +1,299 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Button, Input, Card, List, Typography, Space, Spin, message, Tooltip, Popconfirm } from 'antd';
-import { RobotOutlined, SendOutlined, CloseOutlined, AudioOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Input, Card, message, Tooltip, Popconfirm } from 'antd';
+import { CloseOutlined, DeleteOutlined, AudioOutlined, LoadingOutlined, RobotOutlined } from '@ant-design/icons';
 import axiosClient from '../services/axiosClient';
 
-const { Text } = Typography;
-
-// --- GIỮ NGUYÊN HÀM SPEAK CŨ CỦA BẠN ---
-const speak = async (text) => {
-    if (!text) return;
-    if (window.responsiveVoice) window.responsiveVoice.cancel();
-    window.speechSynthesis.cancel();
-
-    const isEnglish = /^[a-zA-Z0-9\s,.'!?-]*$/.test(text);
-    const lang = isEnglish ? 'en' : 'vi';
-    const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${lang}&client=tw-ob`;
-
-    try {
-        const response = await fetch(url);
-        const blob = await response.blob();
-        const audioUrl = URL.createObjectURL(blob);
-        const audio = new Audio(audioUrl);
-        audio.onended = () => URL.revokeObjectURL(audioUrl);
-        await audio.play();
-    } catch (e) {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = lang === 'en' ? 'en-US' : 'vi-VN';
-        window.speechSynthesis.speak(utterance);
-    }
-};
-
 const AIChatWidget = () => {
+    // --- STATE ---
     const [visible, setVisible] = useState(false);
-
-    // --- 1. SỬA: KHỞI TẠO TỪ LOCALSTORAGE ---
     const [messages, setMessages] = useState(() => {
-        const savedChat = localStorage.getItem('hm_chat_history');
-        if (savedChat) {
-            return JSON.parse(savedChat);
-        } else {
-            return [{ role: 'ai', content: 'Chào bạn! Mình là HM Tutor. Chúc bạn học tốt!' }];
-        }
+        try {
+            const saved = localStorage.getItem('hm_chat_history');
+            return saved ? JSON.parse(saved) : [{ role: 'ai', content: 'Chào bạn! Mình là Minh.' }];
+        } catch { return []; }
     });
-
     const [inputValue, setInputValue] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [isRecording, setIsRecording] = useState(false);
-    const [inputLang, setInputLang] = useState('vi-VN');
 
+    // UI STATES
+    const [isListening, setIsListening] = useState(false);
+    const [isThinking, setIsThinking] = useState(false);
+    const [conversationMode, setConversationMode] = useState(false);
+
+    // REFS (Quản lý logic ngầm)
+    const recognitionRef = useRef(null);
+    const silenceTimerRef = useRef(null);
     const messagesEndRef = useRef(null);
+    const textBufferRef = useRef('');
+    const isSendingRef = useRef(false);
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
+    // [QUAN TRỌNG] Ref để giữ giá trị State luôn mới nhất trong các hàm Callback
+    const conversationModeRef = useRef(false);
+    const utteranceRef = useRef(null); // Giữ giọng đọc không bị Chrome xóa
 
-    // --- 2. SỬA: TỰ ĐỘNG LƯU KHI TIN NHẮN THAY ĐỔI ---
+    const characterImage = "https://cdn-icons-png.flaticon.com/512/4712/4712035.png";
+
+    // Update Ref khi State đổi
+    useEffect(() => { conversationModeRef.current = conversationMode; }, [conversationMode]);
+
+    // Auto scroll
     useEffect(() => {
-        // Lưu mảng messages vào LocalStorage mỗi khi nó thay đổi
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
         localStorage.setItem('hm_chat_history', JSON.stringify(messages));
-        scrollToBottom();
     }, [messages, visible]);
 
-    // Lắng nghe lệnh từ bên ngoài (Giữ nguyên)
-    useEffect(() => {
-        const handleExternalCommand = (e) => {
-            const { message: msg, context } = e.detail;
-            setVisible(true);
-            if (msg) handleSend(msg, context);
-        };
-        window.addEventListener('OPEN_AI_ASSISTANT', handleExternalCommand);
-        return () => window.removeEventListener('OPEN_AI_ASSISTANT', handleExternalCommand);
-    }, []);
+    // --- TTS (ĐỌC) - PHIÊN BẢN CHỐNG LỖI ---
+    const speak = (text, onFinished) => {
+        if (!text) { if (onFinished) onFinished(); return; }
 
-    // --- 3. THÊM: HÀM XÓA LỊCH SỬ ---
-    const clearHistory = () => {
-        const defaultMsg = [{ role: 'ai', content: 'Chào bạn! Mình là HM Tutor. Chúc bạn học tốt!' }];
-        setMessages(defaultMsg);
-        localStorage.removeItem('hm_chat_history');
-        message.success("Đã xóa lịch sử trò chuyện.");
+        // Hủy các giọng đọc cũ đang treo
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'vi-VN';
+        utterance.rate = 1.1;
+
+        // [FIX LỖI CHROME]: Gán vào Ref để không bị Garbage Collection xóa
+        utteranceRef.current = utterance;
+
+        utterance.onend = () => {
+            console.log("🗣️ Đã đọc xong.");
+            if (onFinished) onFinished();
+        };
+
+        utterance.onerror = (e) => {
+            console.error("Lỗi đọc:", e);
+            if (onFinished) onFinished();
+        };
+
+        window.speechSynthesis.speak(utterance);
     };
 
-    const startRecognition = () => {
+    // --- MICROPHONE ENGINE ---
+    const startListening = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) return message.error("Trình duyệt không hỗ trợ thu âm.");
+        if (!SpeechRecognition) return;
+
+        // Nếu Mic đã có và đang chạy (state không phải đã tắt), thì không start lại
+        // Tuy nhiên ở đây ta dùng recognitionRef để check instance
+        if (recognitionRef.current) {
+            try { recognitionRef.current.abort(); } catch (e) { }
+        }
 
         const recognition = new SpeechRecognition();
-        recognition.lang = inputLang;
-        recognition.onstart = () => setIsRecording(true);
-        recognition.onresult = (e) => setInputValue(e.results[0][0].transcript);
-        recognition.onend = () => setIsRecording(false);
-        recognition.start();
-    };
+        recognition.lang = 'vi-VN';
+        recognition.continuous = true;
+        recognition.interimResults = true;
 
-    const handleSend = async (textOverride, contextOverride) => {
-        const textToSend = textOverride || inputValue;
-        if (!textToSend.trim() || loading) return;
+        recognition.onstart = () => {
+            console.log("🎙️ Mic ĐÃ BẬT - Sẵn sàng nghe");
+            setIsListening(true);
+        };
 
-        if (!textOverride) {
-            setMessages(prev => [...prev, { role: 'user', content: textToSend }]);
-        }
-        setInputValue('');
-        setLoading(true);
+        recognition.onend = () => {
+            console.log("⏹️ Mic ĐÃ TẮT");
+            setIsListening(false);
+            recognitionRef.current = null;
+
+            // LOGIC TỰ ĐỘNG BẬT LẠI (Auto-Resume)
+            // Chỉ bật lại nếu:
+            // 1. Đang ở chế độ hội thoại (conversationModeRef.current = true)
+            // 2. Không phải đang gửi tin nhắn (isSendingRef.current = false)
+            // 3. AI không đang suy nghĩ (isThinking = false)
+            if (conversationModeRef.current && !isSendingRef.current && !isThinking) {
+                console.log("🔄 Mic tắt bất ngờ -> Tự động bật lại sau 0.5s...");
+                setTimeout(startListening, 500);
+            }
+        };
+
+        recognition.onresult = (event) => {
+            const resultIndex = event.resultIndex;
+            const transcript = event.results[resultIndex][0].transcript.toLowerCase().trim();
+            const isFinal = event.results[resultIndex].isFinal;
+
+            setInputValue(transcript);
+            textBufferRef.current = transcript;
+
+            // --- LOGIC 1.2 GIÂY IM LẶNG ---
+            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+
+            silenceTimerRef.current = setTimeout(() => {
+                // Chỉ gửi nếu có nội dung
+                if (textBufferRef.current.length > 0 && !isSendingRef.current) {
+                    console.log("⏳ Hết 1.2s -> Chốt đơn:", textBufferRef.current);
+
+                    isSendingRef.current = true; // Khóa gửi
+
+                    // Dừng Mic thủ công để tránh thu tạp âm lúc AI đang xử lý
+                    if (recognitionRef.current) recognitionRef.current.stop();
+
+                    handleSend(textBufferRef.current);
+                }
+            }, 1200);
+        };
 
         try {
-            const res = await axiosClient.post('/ai/chat', {
-                message: textToSend,
-                context: contextOverride
-            });
-            const reply = res.reply || "AI không phản hồi.";
-            setMessages(prev => [...prev, { role: 'ai', content: reply }]);
-            speak(reply);
-        } catch (error) {
-            const msg = error.response?.status === 429
-                ? "Hệ thống bận, vui lòng thử lại sau 10s!"
-                : "Lỗi kết nối AI.";
-            setMessages(prev => [...prev, { role: 'ai', content: msg }]);
-            speak(msg);
-        } finally {
-            setLoading(false);
+            recognition.start();
+            recognitionRef.current = recognition;
+        } catch (e) {
+            console.error("Lỗi bật Mic:", e);
         }
+    };
+
+    const stopListening = () => {
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        if (recognitionRef.current) recognitionRef.current.abort();
+        recognitionRef.current = null;
+        setIsListening(false);
+    };
+
+    // --- SEND LOGIC ---
+    const handleSend = async (text) => {
+        if (!text.trim()) return;
+
+        setIsThinking(true);
+        setInputValue('');
+        textBufferRef.current = '';
+
+        // UI User
+        setMessages(prev => [...prev, { role: 'user', content: text }]);
+
+        try {
+            const historyToSend = messages.slice(-10);
+            // Gửi request lên server
+            const res = await axiosClient.post('/ai/chat', { message: text, history: historyToSend });
+
+            const reply = res.reply || "Minh chưa nghĩ ra câu trả lời.";
+            setMessages(prev => [...prev, { role: 'ai', content: reply }]);
+
+            speak(reply, () => {
+                isSendingRef.current = false;
+                setIsThinking(false);
+                if (conversationModeRef.current) startListening();
+            });
+
+        } catch (error) {
+            let errorMsg = "Lỗi kết nối Server.";
+
+            // Kiểm tra nếu là lỗi 429 (Hết lượt) từ Backend gửi về
+            if (error.response && error.response.status === 429) {
+                // Lấy câu thông báo "Hic, Minh nói chuyện nhiều quá..." từ Backend
+                errorMsg = error.response.data.reply || "Server đang quá tải, thử lại sau nhé!";
+            } else if (error.response && error.response.data && error.response.data.reply) {
+                // Các lỗi khác có tin nhắn từ server (ví dụ lỗi 500 do sai model)
+                errorMsg = error.response.data.reply;
+            }
+
+            // Hiện tin nhắn lỗi vào khung chat như một lời thoại của AI
+            setMessages(prev => [...prev, { role: 'ai', content: errorMsg }]);
+
+            speak(errorMsg, () => {
+                isSendingRef.current = false;
+                setIsThinking(false);
+                // Vẫn cho phép bật lại mic để người dùng thử lại sau
+                if (conversationModeRef.current) startListening();
+            });
+        }
+    };
+
+    // --- TOGGLE CHẾ ĐỘ RẢNH TAY ---
+    const toggleConversation = () => {
+        if (conversationMode) {
+            // TẮT
+            setConversationMode(false); // Ref sẽ tự update qua useEffect
+            stopListening();
+            window.speechSynthesis.cancel();
+            message.info("Đã tắt chế độ rảnh tay.");
+        } else {
+            // BẬT
+            setConversationMode(true);
+            // setConversationMode là bất đồng bộ, nên ta dùng biến tạm hoặc Ref nếu cần logic ngay
+            conversationModeRef.current = true;
+
+            const greeting = "Bắt đầu hội thoại. Bạn nói đi...";
+            speak(greeting, () => {
+                startListening();
+            });
+            message.success("Chế độ rảnh tay đã bật!");
+        }
+    };
+
+    const clearHistory = () => {
+        setMessages([{ role: 'ai', content: 'Chào bạn! Mình là Ming.' }]);
+        localStorage.removeItem('hm_chat_history');
+        message.success("Đã làm mới.");
     };
 
     return (
-        <div style={{ position: 'fixed', bottom: 30, right: 30, zIndex: 9999 }}>
+        <div style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+
             {visible && (
                 <Card
                     title={
                         <div style={{ color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontWeight: 'bold' }}><RobotOutlined /> HM AI Tutor</span>
-
-                            {/* --- NÚT CÔNG CỤ TRÊN HEADER --- */}
-                            <div style={{ display: 'flex', gap: 10 }}>
-                                <Popconfirm
-                                    title="Xóa lịch sử chat?"
-                                    onConfirm={clearHistory}
-                                    okText="Xóa"
-                                    cancelText="Hủy"
-                                >
-                                    <Tooltip title="Xóa lịch sử">
-                                        <DeleteOutlined style={{ cursor: 'pointer', color: '#fff' }} />
-                                    </Tooltip>
-                                </Popconfirm>
-                                <CloseOutlined onClick={() => setVisible(false)} style={{ cursor: 'pointer' }} />
-                            </div>
+                            <span style={{ fontWeight: 'bold' }}>🤖 Trợ lý Ming</span>
+                            <CloseOutlined onClick={() => { setVisible(false); setConversationMode(false); stopListening(); }} style={{ color: '#fff', cursor: 'pointer' }} />
                         </div>
                     }
-                    styles={{
-                        header: { background: '#58cc02', padding: '0 15px', minHeight: '45px' },
-                        body: { padding: 0, display: 'flex', flexDirection: 'column', height: 440 }
-                    }}
-                    style={{ width: 350, borderRadius: 15, overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}
+                    styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', height: 400 }, header: { background: '#58cc02', padding: '0 15px' } }}
+                    style={{ width: 340, marginBottom: 15, borderRadius: 15, border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}
                 >
-                    <div style={{ flex: 1, padding: '15px', overflowY: 'auto', background: '#f8fafc' }}>
+                    <div style={{ flex: 1, padding: '15px', overflowY: 'auto', background: '#f5f5f5' }}>
                         {messages.map((item, index) => (
-                            <div key={index} style={{ display: 'flex', justifyContent: item.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
+                            <div key={index} style={{ display: 'flex', justifyContent: item.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
+                                {item.role === 'ai' && <img src={characterImage} alt="AI" style={{ width: 28, height: 28, marginRight: 8, borderRadius: '50%' }} />}
                                 <div style={{
-                                    maxWidth: '85%', padding: '10px 14px', borderRadius: '15px',
+                                    maxWidth: '80%', padding: '10px 14px', borderRadius: '15px',
                                     background: item.role === 'user' ? '#58cc02' : '#fff',
-                                    color: item.role === 'user' ? '#fff' : '#334155',
-                                    border: item.role === 'ai' ? '1px solid #e2e8f0' : 'none',
-                                    borderTopRightRadius: item.role === 'user' ? '4px' : '15px',
-                                    borderTopLeftRadius: item.role === 'ai' ? '4px' : '15px',
-                                    fontSize: '14px', lineHeight: '1.5',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                                    color: item.role === 'user' ? '#fff' : '#333',
+                                    boxShadow: '0 2px 5px rgba(0,0,0,0.05)'
                                 }}>
                                     {item.content}
                                 </div>
                             </div>
                         ))}
 
-                        {loading && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 5 }}>
-                                <Spin size="small" />
-                                <Text type="secondary" italic style={{ fontSize: 12 }}>AI đang suy nghĩ...</Text>
+                        {/* TRẠNG THÁI MIC REAL-TIME */}
+                        {isListening && (
+                            <div style={{ color: '#58cc02', fontStyle: 'italic', fontSize: 12, padding: 10, textAlign: 'right' }}>
+                                🎙️ {inputValue || "Đang lắng nghe..."}
                             </div>
                         )}
+                        {isThinking && <div style={{ padding: 10, fontSize: 12, color: '#888' }}>Mình đang suy nghĩ, bạn đợi 1 xíu nhé...</div>}
                         <div ref={messagesEndRef} />
                     </div>
 
-                    <div style={{ padding: '12px', borderTop: '1px solid #e2e8f0', background: '#fff', display: 'flex', gap: '8px' }}>
-                        <Button size="small" onClick={() => setInputLang(prev => prev === 'vi-VN' ? 'en-US' : 'vi-VN')} style={{ borderRadius: 8 }}>
-                            {inputLang === 'en-US' ? 'EN' : 'VN'}
-                        </Button>
-                        <Button shape="circle" danger={isRecording} icon={<AudioOutlined />} onClick={startRecognition} />
+                    <div style={{ padding: 10, background: '#fff', display: 'flex', gap: 5, borderTop: '1px solid #eee' }}>
                         <Input
                             value={inputValue}
                             onChange={(e) => setInputValue(e.target.value)}
-                            onPressEnter={() => handleSend()}
-                            placeholder="Hỏi mình bất cứ gì..."
+                            placeholder={isListening ? "Đang nghe bạn nói..." : "Nhập tin nhắn..."}
+                            disabled={isListening}
+                            onPressEnter={() => handleSend(inputValue)}
                             style={{ borderRadius: 20 }}
                         />
-                        <Button type="primary" shape="circle" icon={<SendOutlined />} onClick={() => handleSend()} style={{ background: '#58cc02' }} />
+
+                        {/* NÚT MIC THẦN THÁNH */}
+                        <div
+                            onClick={toggleConversation}
+                            style={{
+                                cursor: 'pointer', width: 40, height: 32, borderRadius: '20px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                background: conversationMode ? '#ff4d4f' : '#f0f0f0',
+                                color: conversationMode ? '#fff' : '#666',
+                                transition: 'all 0.3s',
+                                boxShadow: conversationMode ? '0 0 10px rgba(255, 77, 79, 0.5)' : 'none'
+                            }}
+                        >
+                            {isThinking ? <LoadingOutlined /> : <AudioOutlined spin={isListening} />}
+                        </div>
                     </div>
                 </Card>
             )}
 
-            {!visible && (
-                <Button type="primary" shape="circle" style={{ width: 60, height: 60, background: '#58cc02', boxShadow: '0 4px 15px rgba(88, 204, 2, 0.4)' }} onClick={() => setVisible(true)}>
-                    <RobotOutlined style={{ fontSize: 30 }} />
-                </Button>
-            )}
+            {/* AVATAR TRIGGER */}
+            <div onClick={() => setVisible(!visible)} className="ai-avatar-trigger" style={{ cursor: 'pointer' }}>
+                <img src={characterImage} alt="AI" style={{ width: 70, height: 70, filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.2))' }} />
+            </div>
         </div>
     );
 };

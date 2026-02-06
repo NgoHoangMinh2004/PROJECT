@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import { Layout, Menu, Avatar, Dropdown, Space, message } from 'antd';
 import { UserOutlined, LogoutOutlined, FormOutlined, ReadOutlined } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+
+// CHỈ IMPORT WIDGET (Logic nghe ngầm + chat đã nằm trọn trong này)
 import AIChatWidget from '../components/AIChatWidget';
 
 const { Header, Content, Footer } = Layout;
@@ -17,7 +19,6 @@ const ClientLayout = () => {
 
     useEffect(() => {
         if (user) {
-            // Check nếu là tài khoản mới
             if (Number(user.Age) === 0 || user.Age === undefined) {
                 navigate('/onboarding', { replace: true });
             }
@@ -36,16 +37,12 @@ const ClientLayout = () => {
     const userMenuItems = {
         items: [
             {
-                key: '1',
-                label: 'Hồ sơ cá nhân',
-                icon: <UserOutlined />,
-                onClick: () => navigate('/profile')
+                key: '1', label: 'Hồ sơ cá nhân', icon: <UserOutlined />, onClick: () => navigate('/profile')
             },
             { key: '2', label: 'Đăng xuất', icon: <LogoutOutlined />, danger: true, onClick: handleLogout },
         ]
     };
 
-    // Xác định menu đang chọn dựa trên URL
     const selectedKey = location.pathname.includes('curriculum') ? 'curriculum' : 'learn';
 
     return (
@@ -85,8 +82,13 @@ const ClientLayout = () => {
                     <Outlet />
                 </div>
             </Content>
-            <Footer style={{ textAlign: 'center' }}>English App ©2026</Footer>
+
+            <Footer style={{ textAlign: 'center' }}>English App </Footer>
+
+            {/* --- KHU VỰC AI ASSISTANT --- */}
+            {/* Chỉ cần đặt component này, nó sẽ tự động chạy ngầm lắng nghe "Minh ơi" */}
             <AIChatWidget />
+
         </Layout>
     );
 };
